@@ -88,6 +88,7 @@ void swoole_init(void)
 
     //init global lock
     swMutex_create(&SwooleGS->lock, 1);
+    swMutex_create(&SwooleGS->lock_2, 1);
 
     if (getrlimit(RLIMIT_NOFILE, &rlmt) < 0)
     {
@@ -260,6 +261,9 @@ int swoole_type_size(char type)
 {
     switch (type)
     {
+    case 'c':
+    case 'C':
+        return 1;
     case 's':
     case 'S':
     case 'n':

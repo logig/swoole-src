@@ -660,11 +660,8 @@ int swServer_start(swServer *serv)
     {
         ret = swServer_start_proxy(serv);
     }
-    if (ret < 0)
-    {
-        SwooleGS->start = 0;
-    }
     swServer_free(serv);
+    SwooleGS->start = 0;
     return SW_OK;
 }
 
@@ -1134,6 +1131,7 @@ int swServer_get_socket(swServer *serv, int port)
 static void swServer_signal_hanlder(int sig)
 {
     int status;
+    pid_t pid;
     switch (sig)
     {
     case SIGTERM:
@@ -1151,7 +1149,8 @@ static void swServer_signal_hanlder(int sig)
         swSystemTimer_signal_handler(SIGALRM);
         break;
     case SIGCHLD:
-        if (waitpid(SwooleGS->manager_pid, &status, WNOHANG) >= 0 && SwooleG.running > 0)
+        pid = waitpid(-1, &status, WNOHANG);
+        if (pid > 0 && pid == SwooleGS->manager_pid && SwooleG.running)
         {
             swWarn("Fatal Error: manager process exit. status=%d, signal=%d.", WEXITSTATUS(status), WTERMSIG(status));
         }
