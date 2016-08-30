@@ -35,11 +35,11 @@
 		<email>shenzhe163@gmail.com</email>
 		<active>yes</active>
 	</developer>
-    <date>2016-07-28</date>
-    <time>11:48:51</time>
+    <date>2016-08-23</date>
+    <time>12:48:51</time>
     <version>
-		<release>1.8.9</release>
-		<api>1.8.9</api>
+		<release>1.8.10</release>
+		<api>1.8.10</api>
     </version>
     <stability>
         <release>stable</release>
@@ -47,17 +47,8 @@
     </stability>
     <license uri="http://www.apache.org/licenses/LICENSE-2.0.html">Apache2.0</license>
     <notes>
-- Added Swoole\Server\Port->getSocket
-- Added Swoole\Server->getClientInfo()['close_errno'] property
-- Added Swoole\Event namespace and class styles
-- Added Swoole\MySQL character set support
-- Added Swoole\Server->taskWaitMulti can perform multiple tasks concurrently
-- Added Swoole\Client->getPeerCert method
-- Added Swoole\Client->pause and Swoole\Client->resume
-- Fixed Swoole\Server->taskwait cannot use in BASE mode 
-- Fixed Swoole\MySQL client crash when receive more than 250 field query statement
-- Fixed Swoole\Server->task third parameter passed Callback Crash at PHP7
-- Fixed Swoole\Http\Request->files crash on PHP7 when externally referenced
+- Fixed Swoole\Http\Client crash when do close connection in the callback function
+- Fixed Swoole\Http\Server cannot support more than 1024 concurrent
     </notes>
 	<contents>
 		<dir name="/">

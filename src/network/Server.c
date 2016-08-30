@@ -660,11 +660,8 @@ int swServer_start(swServer *serv)
     {
         ret = swServer_start_proxy(serv);
     }
-    if (ret < 0)
-    {
-        SwooleGS->start = 0;
-    }
     swServer_free(serv);
+    SwooleGS->start = 0;
     return SW_OK;
 }
 
@@ -920,7 +917,7 @@ int swServer_tcp_send(swServer *serv, int fd, void *data, uint32_t length)
     return SW_OK;
 }
 
-int swServer_tcp_sendfile(swServer *serv, int fd, char *filename, uint32_t len)
+int swServer_tcp_sendfile(swServer *serv, int fd, char *filename, uint32_t len, off_t offset)
 {
 #ifdef SW_USE_OPENSSL
     swConnection *conn = swServer_connection_verify(serv, fd);
@@ -932,29 +929,22 @@ int swServer_tcp_sendfile(swServer *serv, int fd, char *filename, uint32_t len)
 #endif
 
     swSendData send_data;
-    send_data.info.len = len;
     char buffer[SW_BUFFER_SIZE];
 
     //file name size
-    if (send_data.info.len > SW_BUFFER_SIZE - 1)
+    if (len > SW_BUFFER_SIZE - sizeof(offset) - 1)
     {
         swoole_error_log(SW_LOG_WARNING, SW_ERROR_NAME_TOO_LONG, "sendfile name too long. [MAX_LENGTH=%d]",
                 (int) SW_BUFFER_SIZE - 1);
         return SW_ERR;
     }
 
-    //check file exists
-    if (access(filename, R_OK) < 0)
-    {
-        swoole_error_log(SW_LOG_WARNING, SW_ERROR_FILE_NOT_EXIST, "file[%s] not found.", filename);
-        return SW_ERR;
-    }
-
     send_data.info.fd = fd;
     send_data.info.type = SW_EVENT_SENDFILE;
-    memcpy(buffer, filename, send_data.info.len);
-    buffer[send_data.info.len] = 0;
-    send_data.info.len++;
+    memcpy(buffer, &offset, sizeof(off_t));
+    memcpy(buffer + sizeof(off_t), filename, len);
+    buffer[sizeof(off_t) + len] = 0;
+    send_data.info.len = sizeof(off_t) + len + 1;
     send_data.length = 0;
     send_data.data = buffer;
 
@@ -1141,6 +1131,7 @@ int swServer_get_socket(swServer *serv, int port)
 static void swServer_signal_hanlder(int sig)
 {
     int status;
+    pid_t pid;
     switch (sig)
     {
     case SIGTERM:
@@ -1158,7 +1149,8 @@ static void swServer_signal_hanlder(int sig)
         swSystemTimer_signal_handler(SIGALRM);
         break;
     case SIGCHLD:
-        if (waitpid(SwooleGS->manager_pid, &status, WNOHANG) >= 0 && SwooleG.running > 0)
+        pid = waitpid(-1, &status, WNOHANG);
+        if (pid > 0 && pid == SwooleGS->manager_pid && SwooleG.running)
         {
             swWarn("Fatal Error: manager process exit. status=%d, signal=%d.", WEXITSTATUS(status), WTERMSIG(status));
         }
@@ -1225,6 +1217,7 @@ static void swHeartbeatThread_loop(swThreadParam *param)
     int checktime;
 
     SwooleTG.type = SW_THREAD_HEARTBEAT;
+    SwooleTG.id = serv->reactor_num + serv->udp_thread_num;
 
     bzero(&notify_ev, sizeof(notify_ev));
     notify_ev.type = SW_EVENT_CLOSE;
@@ -1241,7 +1234,7 @@ static void swHeartbeatThread_loop(swThreadParam *param)
             swTrace("check fd=%d", fd);
             conn = swServer_connection_get(serv, fd);
 
-            if (conn != NULL && conn->active == 1 && conn->fdtype == SW_FD_TCP)
+            if (conn != NULL && conn->active == 1 && conn->closed == 0 && conn->fdtype == SW_FD_TCP)
             {
                 if (conn->protect || conn->last_time > checktime)
                 {
@@ -1271,7 +1264,14 @@ static void swHeartbeatThread_loop(swThreadParam *param)
                     reactor = &serv->reactor_threads[conn->from_id].reactor;
                 }
                 //notify to reactor thread
-                reactor->set(reactor, fd, SW_FD_TCP | SW_EVENT_WRITE);
+                if (conn->removed)
+                {
+                    serv->factory.notify(&serv->factory, &notify_ev);
+                }
+                else
+                {
+                    reactor->set(reactor, fd, SW_FD_TCP | SW_EVENT_WRITE);
+                }
             }
         }
         sleep(serv->heartbeat_check_interval);

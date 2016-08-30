@@ -569,7 +569,7 @@ int swReactorThread_send(swSendData *_send)
     /**
      * Reset send buffer, Immediately close the connection.
      */
-    if (_send->info.type == SW_EVENT_CLOSE && conn->close_reset)
+    if (_send->info.type == SW_EVENT_CLOSE && (conn->close_reset || conn->removed))
     {
         goto close_fd;
     }
@@ -651,7 +651,7 @@ int swReactorThread_send(swSendData *_send)
     //sendfile to client
     else if (_send->info.type == SW_EVENT_SENDFILE)
     {
-        swConnection_sendfile(conn, _send_data);
+        swConnection_sendfile(conn, _send_data + sizeof(off_t), *((off_t *) _send_data));
     }
     //send data
     else
@@ -846,6 +846,12 @@ static int swReactorThread_onWrite(swReactor *reactor, swEvent *ev)
     }
     else if (conn->close_notify)
     {
+#ifdef SW_USE_OPENSSL
+        if (conn->ssl && conn->ssl_state != SW_SSL_STATE_READY)
+        {
+            return swReactorThread_close(reactor, fd);
+        }
+#endif
         swDataHead close_event;
         close_event.type = SW_EVENT_CLOSE;
         close_event.from_id = reactor->id;
@@ -1216,6 +1222,7 @@ static int swUDPThread_start(swServer *serv)
                 return SW_ERR;
             }
             ls->thread_id = thread_id;
+            serv->udp_thread_num ++;
         }
     }
     return SW_OK;
@@ -1258,7 +1265,7 @@ int swReactorThread_dispatch(swConnection *conn, char *data, uint32_t length)
     task.data.info.fd = conn->fd;
     task.data.info.from_id = conn->from_id;
 
-    swTrace("send string package, size=%ld bytes.", length);
+    swTrace("send string package, size=%ld bytes.", (long)length);
 
 #ifdef SW_USE_RINGBUFFER
     swServer *serv = SwooleG.serv;
@@ -1466,10 +1473,10 @@ void swReactorThread_free(swServer *serv)
         {
             if (ls->type == SW_SOCK_UDP || ls->type == SW_SOCK_UDP6 || ls->type == SW_SOCK_UNIX_DGRAM)
             {
-    			if (pthread_cancel(ls->thread_id) < 0)
-    			{
-    				swSysError("pthread_cancel(%d) failed.", (int) ls->thread_id);
-    			}
+                if (pthread_cancel(ls->thread_id) < 0)
+                {
+                    swSysError("pthread_cancel(%d) failed.", (int) ls->thread_id);
+                }
                 if (pthread_join(ls->thread_id, NULL))
                 {
                     swWarn("pthread_join() failed. Error: %s[%d]", strerror(errno), errno);

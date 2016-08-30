@@ -17,6 +17,10 @@
 #ifndef SW_CONNECTION_H_
 #define SW_CONNECTION_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "buffer.h"
 
 #ifdef SW_USE_OPENSSL
@@ -36,7 +40,7 @@ swString* swConnection_get_string_buffer(swConnection *conn);
 void swConnection_clear_string_buffer(swConnection *conn);
 swBuffer_trunk* swConnection_get_out_buffer(swConnection *conn, uint32_t type);
 swBuffer_trunk* swConnection_get_in_buffer(swConnection *conn);
-int swConnection_sendfile(swConnection *conn, char *filename);
+int swConnection_sendfile(swConnection *conn, char *filename, off_t offset);
 int swConnection_onSendfile(swConnection *conn, swBuffer_trunk *chunk);
 void swConnection_sendfile_destructor(swBuffer_trunk *chunk);
 char* swConnection_get_ip(swConnection *conn);
@@ -194,5 +198,8 @@ static sw_inline int swConnection_error(int err)
 	}
 }
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SW_CONNECTION_H_ */
